@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Roblox Messages</title>
+  <link rel="stylesheet" href="/styles/style.css">
+</head>
+<body>
+  <button onclick="window.location.href='/'">Back to Home</button>
+  <div id="content">
+    <h1>Roblox Messages</h1>
+    <!-- Content for Roblox Messages -->
+  </div>
+  <script>
+    const darkModeButton = document.createElement('button');
+    darkModeButton.innerText = 'Toggle Dark Mode';
+    darkModeButton.onclick = function() {
+      const currentMode = document.cookie.replace(/(?:(?:^|.*;\s*)darkMode\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+      if (currentMode === 'dark') {
+        document.cookie = "darkMode=light; path=/";
+        document.body.classList.remove('dark-mode');
+      } else {
+        document.cookie = "darkMode=dark; path=/";
+        document.body.classList.add('dark-mode');
+      }
+    };
+    document.body.appendChild(darkModeButton);
+
+    if (document.cookie.includes('darkMode=dark')) {
+      document.body.classList.add('dark-mode');
+    }
+  </script>
+</body>
+</html>
