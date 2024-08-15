@@ -3,11 +3,10 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const app = express();
 
+let messages = []; // Store received messages
+
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
-
-// In-memory storage for messages (you can replace this with a database if needed)
-let messages = [];
 
 // Endpoint to receive messages from Roblox
 app.post('/roblox-message', async (req, res) => {
@@ -18,9 +17,6 @@ app.post('/roblox-message', async (req, res) => {
   }
 
   try {
-    // Store the message in the in-memory storage
-    messages.push({ user, message });
-
     // Log received message
     console.log(`Received message from ${user}: ${message}`);
 
@@ -41,6 +37,9 @@ app.post('/roblox-message', async (req, res) => {
     // Log the reply from ChatGPT
     console.log(`Reply from ChatGPT: ${reply}`);
 
+    // Store the received message and reply
+    messages.push({ user, message, reply });
+
     // Send the reply back to Roblox
     res.json({ reply });
   } catch (error) {
@@ -49,12 +48,12 @@ app.post('/roblox-message', async (req, res) => {
   }
 });
 
-// New route to display all received messages
+// Route to display all received messages
 app.get('/roblox-messages', (req, res) => {
   res.send(`
     <h1>Messages Received from Roblox</h1>
     <ul>
-      ${messages.map(msg => `<li><strong>${msg.user}</strong>: ${msg.message}</li>`).join('')}
+      ${messages.map(msg => `<li><strong>${msg.user}</strong>: ${msg.message} <br> <em>Reply:</em> ${msg.reply}</li>`).join('')}
     </ul>
     <button onclick="window.location.href='/'">Go Back to Home</button>
   `);
