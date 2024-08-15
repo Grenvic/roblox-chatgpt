@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Chat App</title>
+  <link rel="stylesheet" href="/styles/style.css">
+</head>
+<body>
+  <button onclick="window.location.href='/roblox-messages'">Go to Roblox Messages</button>
+  <button onclick="window.location.href='/logs'">Go to Logs</button>
+  <div id="content">
+    <h1>Welcome to My Chat App</h1>
+  </div>
+  <script>
+    const darkModeButton = document.createElement('button');
+    darkModeButton.innerText = 'Toggle Dark Mode';
+    darkModeButton.onclick = function() {
+      const currentMode = document.cookie.replace(/(?:(?:^|.*;\s*)darkMode\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+      if (currentMode === 'dark') {
+        document.cookie = "darkMode=light; path=/";
+        document.body.classList.remove('dark-mode');
+      } else {
+        document.cookie = "darkMode=dark; path=/";
+        document.body.classList.add('dark-mode');
+      }
+    };
+    document.body.appendChild(darkModeButton);
+
+    if (document.cookie.includes('darkMode=dark')) {
+      document.body.classList.add('dark-mode');
+    }
+  </script>
+</body>
+</html>
