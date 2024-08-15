@@ -4,12 +4,17 @@ const axios = require('axios');
 const cookieParser = require('cookie-parser');
 const Redis = require('redis');
 const { Pool } = require('pg');
+const path = require('path');
 const app = express();
 
 // Middleware
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(express.static('public')); // Serve static files from 'public'
+app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from 'public'
+
+// Set view engine to EJS
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 // Redis client setup
 const redisClient = Redis.createClient({
@@ -64,14 +69,22 @@ app.get('/', (req, res) => {
 });
 
 // Route for Roblox messages page
-app.get('/roblox-messages', (req, res) => {
-  res.render('roblox-messages');
+app.get('/roblox-messages', async (req, res) => {
+  try {
+    // Fetch messages from Redis
+    const messages = await redisClient.lRange('messages', 0, -1);
+    const replies = await redisClient.lRange('replies', 0, -1);
+    res.render('roblox-messages', { messages: messages.map(msg => JSON.parse(msg)), replies: replies.map(rep => JSON.parse(rep)) });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 // Route for logs page
 app.get('/logs', async (req, res) => {
   try {
-    // Fetch logs from Redis or your logging mechanism
+    // Fetch logs from Redis
     const logs = await redisClient.lRange('logs', 0, -1);
     res.render('logs', { logs });
   } catch (error) {
