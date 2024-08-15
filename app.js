@@ -1,12 +1,20 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+const redis = require('redis');
 const app = express();
-
-let messages = []; // Store received messages
 
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
+
+// Redis client setup
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL // Redis Cloud URL from Heroku config vars
+});
+
+redisClient.on('error', (err) => {
+  console.error('Redis error:', err);
+});
 
 // Endpoint to receive messages from Roblox
 app.post('/roblox-message', async (req, res) => {
@@ -37,8 +45,8 @@ app.post('/roblox-message', async (req, res) => {
     // Log the reply from ChatGPT
     console.log(`Reply from ChatGPT: ${reply}`);
 
-    // Store the received message and reply
-    messages.push({ user, message, reply });
+    // Store the received message and reply in Redis
+    await redisClient.rPush('messages', JSON.stringify({ user, message, reply }));
 
     // Send the reply back to Roblox
     res.json({ reply });
@@ -49,14 +57,22 @@ app.post('/roblox-message', async (req, res) => {
 });
 
 // Route to display all received messages
-app.get('/roblox-messages', (req, res) => {
-  res.send(`
-    <h1>Messages Received from Roblox</h1>
-    <ul>
-      ${messages.map(msg => `<li><strong>${msg.user}</strong>: ${msg.message} <br> <em>Reply:</em> ${msg.reply}</li>`).join('')}
-    </ul>
-    <button onclick="window.location.href='/'">Go Back to Home</button>
-  `);
+app.get('/roblox-messages', async (req, res) => {
+  try {
+    const messages = await redisClient.lRange('messages', 0, -1);
+    const parsedMessages = messages.map(msg => JSON.parse(msg));
+
+    res.send(`
+      <h1>Messages Received from Roblox</h1>
+      <ul>
+        ${parsedMessages.map(msg => `<li><strong>${msg.user}</strong>: ${msg.message} <br> <em>Reply:</em> ${msg.reply}</li>`).join('')}
+      </ul>
+      <button onclick="window.location.href='/'">Go Back to Home</button>
+    `);
+  } catch (error) {
+    console.error('Error retrieving messages from Redis:', error);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 // Basic route for testing with navigation button
