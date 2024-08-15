@@ -1,2 +1,2 @@
 # roblox-chatgpt
-literally used chatgpt for this entire thing lmao
+integrating chatgpt with roblox (its painful)
