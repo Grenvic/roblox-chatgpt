@@ -3,10 +3,28 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const redis = require('redis');
 const { Client } = require('pg');
+const winston = require('winston');
+const PapertrailTransport = require('winston-papertrail').PapertrailTransport;
 const app = express();
 
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
+
+// Create a logger with Papertrail
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new PapertrailTransport({
+      host: process.env.PAPERTRAIL_HOST,
+      port: process.env.PAPERTRAIL_PORT
+    })
+  ]
+});
 
 // Redis client setup
 const redisClient = redis.createClient({
@@ -14,7 +32,7 @@ const redisClient = redis.createClient({
 });
 
 redisClient.on('error', (err) => {
-  console.error('Redis error:', err);
+  logger.error('Redis error:', err);
 });
 
 // PostgreSQL client setup
@@ -26,8 +44,8 @@ const pgClient = new Client({
 });
 
 pgClient.connect()
-  .then(() => console.log('Connected to PostgreSQL'))
-  .catch(err => console.error('PostgreSQL connection error:', err));
+  .then(() => logger.info('Connected to PostgreSQL'))
+  .catch(err => logger.error('PostgreSQL connection error:', err));
 
 // Create table if it doesn't exist in Postgres
 const createTable = `
@@ -40,8 +58,8 @@ const createTable = `
 `;
 
 pgClient.query(createTable)
-  .then(() => console.log('Messages table created or already exists'))
-  .catch(err => console.error('Error creating messages table:', err));
+  .then(() => logger.info('Messages table created or already exists'))
+  .catch(err => logger.error('Error creating messages table:', err));
 
 // Endpoint to receive messages from Roblox
 app.post('/roblox-message', async (req, res) => {
@@ -53,7 +71,7 @@ app.post('/roblox-message', async (req, res) => {
 
   try {
     // Log received message
-    console.log(`Received message from ${user}: ${message}`);
+    logger.info(`Received message from ${user}: ${message}`);
 
     // Call ChatGPT API with the received message
     const response = await axios.post('https://api.openai.com/v1/completions', {
@@ -70,7 +88,7 @@ app.post('/roblox-message', async (req, res) => {
     const reply = response.data.choices[0].text.trim();
 
     // Log the reply from ChatGPT
-    console.log(`Reply from ChatGPT: ${reply}`);
+    logger.info(`Reply from ChatGPT: ${reply}`);
 
     // Store the received message and reply in Redis
     await redisClient.rPush('messages', JSON.stringify({ user, message, reply }));
@@ -81,7 +99,7 @@ app.post('/roblox-message', async (req, res) => {
     // Send the reply back to Roblox
     res.json({ reply });
   } catch (error) {
-    console.error('Error communicating with ChatGPT:', error);
+    logger.error('Error communicating with ChatGPT:', error);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -100,9 +118,19 @@ app.get('/roblox-messages', async (req, res) => {
       <button onclick="window.location.href='/'">Go Back to Home</button>
     `);
   } catch (error) {
-    console.error('Error retrieving messages from Redis:', error);
+    logger.error('Error retrieving messages from Redis:', error);
     res.status(500).send('Internal Server Error');
   }
+});
+
+// Route to view logs
+app.get('/logs', (req, res) => {
+  res.send(`
+    <h1>Application Logs</h1>
+    <button onclick="window.location.href='/'">Go Back to Home</button>
+  `);
+  // To display logs from Papertrail, you might need additional setup or custom solutions
+  // Papertrail logs are typically accessed via their web interface
 });
 
 // Basic route for testing with navigation button
@@ -110,11 +138,12 @@ app.get('/', (req, res) => {
   res.send(`
     <h1>Hello, world! Your app is running successfully. :3</h1>
     <button onclick="window.location.href='/roblox-messages'">View Roblox Messages</button>
+    <button onclick="window.location.href='/logs'">View Logs</button>
   `);
 });
 
 // Set the port to the Heroku environment variable or default to 3000
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  logger.info(`Server running on port ${port}`);
 });
