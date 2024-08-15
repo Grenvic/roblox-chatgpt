@@ -9,10 +9,11 @@
   "dependencies": {
     "express": "^4.18.2",
     "body-parser": "^1.20.2",
-    "axios": "^0.27.2",
-    "redis": "^4.2.2",
-    "pg": "^8.7.3",
-    "papertrail": "^1.0.0"
+    "axios": "^1.4.0",
+    "request": "^2.88.2",  
+    "papertrail": "^1.3.0", 
+    "pg": "^8.7.3",         
+    "redis": "^4.0.4"       
   },
   "engines": {
     "node": ">=14.0.0"
