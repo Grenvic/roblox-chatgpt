@@ -6,6 +6,9 @@ const app = express();
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
+// In-memory storage for messages (you can replace this with a database if needed)
+let messages = [];
+
 // Endpoint to receive messages from Roblox
 app.post('/roblox-message', async (req, res) => {
   const { message, user } = req.body; // Extract message and user from request body
@@ -15,6 +18,9 @@ app.post('/roblox-message', async (req, res) => {
   }
 
   try {
+    // Store the message in the in-memory storage
+    messages.push({ user, message });
+
     // Log received message
     console.log(`Received message from ${user}: ${message}`);
 
@@ -41,6 +47,16 @@ app.post('/roblox-message', async (req, res) => {
     console.error('Error communicating with ChatGPT:', error);
     res.status(500).send('Internal Server Error');
   }
+});
+
+// New route to display all received messages
+app.get('/roblox-messages', (req, res) => {
+  res.send(`
+    <h1>Messages Received from Roblox</h1>
+    <ul>
+      ${messages.map(msg => `<li><strong>${msg.user}</strong>: ${msg.message}</li>`).join('')}
+    </ul>
+  `);
 });
 
 // Basic route for testing
