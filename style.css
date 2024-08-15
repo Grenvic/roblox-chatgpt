@@ -1,5 +1,5 @@
-/* Default light mode styles */
 body {
+  font-family: Arial, sans-serif;
   background-color: white;
   color: black;
 }
@@ -10,5 +10,5 @@ body {
 }
 
 button {
-  margin: 5px;
+  margin: 10px;
 }
