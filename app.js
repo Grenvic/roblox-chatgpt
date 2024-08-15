@@ -11,7 +11,7 @@ let messages = [];
 
 // Endpoint to receive messages from Roblox
 app.post('/roblox-message', async (req, res) => {
-  const { message, user } = req.body; // Extract message and user from request body
+  const { message, user } = req.body;
 
   if (!message || !user) {
     return res.status(400).send('Invalid request. Message or user missing.');
@@ -56,12 +56,16 @@ app.get('/roblox-messages', (req, res) => {
     <ul>
       ${messages.map(msg => `<li><strong>${msg.user}</strong>: ${msg.message}</li>`).join('')}
     </ul>
+    <button onclick="window.location.href='/'">Go Back to Home</button>
   `);
 });
 
-// Basic route for testing
+// Basic route for testing with navigation button
 app.get('/', (req, res) => {
-  res.send('Hello, world! Your app is running successfully. :3');
+  res.send(`
+    <h1>Hello, world! Your app is running successfully. :3</h1>
+    <button onclick="window.location.href='/roblox-messages'">View Roblox Messages</button>
+  `);
 });
 
 // Set the port to the Heroku environment variable or default to 3000
