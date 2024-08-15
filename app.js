@@ -8,6 +8,7 @@ const app = express();
 
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
+app.use(express.static('public')); // Serve static files from 'public' directory
 
 // Initialize PostgreSQL and Redis clients
 const pool = new Pool({
@@ -68,13 +69,53 @@ app.post('/roblox-message', async (req, res) => {
 
 // Basic route for testing
 app.get('/', (req, res) => {
-  res.send('Hello, world! Your app is running successfully. :3');
+  res.send(`
+    <html>
+      <head>
+        <title>Home</title>
+      </head>
+      <body>
+        <h1>Welcome to My Chat App</h1>
+        <a href="/roblox-messages"><button>Go to Roblox Messages</button></a>
+      </body>
+    </html>
+  `);
 });
 
-// Remove the logs route
-// app.get('/logs', (req, res) => {
-//   res.send('Logs page');
-// });
+// Route to display Roblox messages
+app.get('/roblox-messages', async (req, res) => {
+  try {
+    // Retrieve messages from Redis
+    redisClient.lRange('messages', 0, -1, (err, messages) => {
+      if (err) {
+        console.error('Error retrieving messages from Redis:', err);
+        return res.status(500).send('Error retrieving messages.');
+      }
+
+      // Render messages on the page
+      res.send(`
+        <html>
+          <head>
+            <title>Roblox Messages</title>
+          </head>
+          <body>
+            <h1>Roblox Messages</h1>
+            <a href="/"><button>Back to Home</button></a>
+            <ul>
+              ${messages.map(message => {
+                const { user, message: msg, reply } = JSON.parse(message);
+                return `<li><strong>${user}</strong>: ${msg} <br> <em>Reply: ${reply}</em></li>`;
+              }).join('')}
+            </ul>
+          </body>
+        </html>
+      `);
+    });
+  } catch (error) {
+    console.error('Error displaying messages:', error);
+    res.status(500).send('Error displaying messages.');
+  }
+});
 
 // Set the port to the Heroku environment variable or default to 3000
 const port = process.env.PORT || 3000;
