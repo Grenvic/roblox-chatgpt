@@ -3,27 +3,16 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const redis = require('redis');
 const { Client } = require('pg');
-const winston = require('winston');
-const PapertrailTransport = require('winston-papertrail').PapertrailTransport;
 const app = express();
+const Papertrail = require('papertrail');
 
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
-// Create a logger with Papertrail
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new PapertrailTransport({
-      host: process.env.PAPERTRAIL_HOST,
-      port: process.env.PAPERTRAIL_PORT
-    })
-  ]
+// Create Papertrail logger
+const papertrail = new Papertrail({
+  host: process.env.PAPERTRAIL_HOST,
+  port: process.env.PAPERTRAIL_PORT
 });
 
 // Redis client setup
@@ -32,7 +21,7 @@ const redisClient = redis.createClient({
 });
 
 redisClient.on('error', (err) => {
-  logger.error('Redis error:', err);
+  papertrail.log('Redis error:', err);
 });
 
 // PostgreSQL client setup
@@ -44,8 +33,8 @@ const pgClient = new Client({
 });
 
 pgClient.connect()
-  .then(() => logger.info('Connected to PostgreSQL'))
-  .catch(err => logger.error('PostgreSQL connection error:', err));
+  .then(() => papertrail.log('Connected to PostgreSQL'))
+  .catch(err => papertrail.log('PostgreSQL connection error:', err));
 
 // Create table if it doesn't exist in Postgres
 const createTable = `
@@ -58,8 +47,8 @@ const createTable = `
 `;
 
 pgClient.query(createTable)
-  .then(() => logger.info('Messages table created or already exists'))
-  .catch(err => logger.error('Error creating messages table:', err));
+  .then(() => papertrail.log('Messages table created or already exists'))
+  .catch(err => papertrail.log('Error creating messages table:', err));
 
 // Endpoint to receive messages from Roblox
 app.post('/roblox-message', async (req, res) => {
@@ -71,7 +60,7 @@ app.post('/roblox-message', async (req, res) => {
 
   try {
     // Log received message
-    logger.info(`Received message from ${user}: ${message}`);
+    papertrail.log(`Received message from ${user}: ${message}`);
 
     // Call ChatGPT API with the received message
     const response = await axios.post('https://api.openai.com/v1/completions', {
@@ -88,7 +77,7 @@ app.post('/roblox-message', async (req, res) => {
     const reply = response.data.choices[0].text.trim();
 
     // Log the reply from ChatGPT
-    logger.info(`Reply from ChatGPT: ${reply}`);
+    papertrail.log(`Reply from ChatGPT: ${reply}`);
 
     // Store the received message and reply in Redis
     await redisClient.rPush('messages', JSON.stringify({ user, message, reply }));
@@ -99,7 +88,7 @@ app.post('/roblox-message', async (req, res) => {
     // Send the reply back to Roblox
     res.json({ reply });
   } catch (error) {
-    logger.error('Error communicating with ChatGPT:', error);
+    papertrail.log('Error communicating with ChatGPT:', error);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -118,7 +107,7 @@ app.get('/roblox-messages', async (req, res) => {
       <button onclick="window.location.href='/'">Go Back to Home</button>
     `);
   } catch (error) {
-    logger.error('Error retrieving messages from Redis:', error);
+    papertrail.log('Error retrieving messages from Redis:', error);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -129,8 +118,7 @@ app.get('/logs', (req, res) => {
     <h1>Application Logs</h1>
     <button onclick="window.location.href='/'">Go Back to Home</button>
   `);
-  // To display logs from Papertrail, you might need additional setup or custom solutions
-  // Papertrail logs are typically accessed via their web interface
+  // Papertrail logs are accessed via the Papertrail web interface
 });
 
 // Basic route for testing with navigation button
@@ -145,5 +133,5 @@ app.get('/', (req, res) => {
 // Set the port to the Heroku environment variable or default to 3000
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  logger.info(`Server running on port ${port}`);
+  papertrail.log(`Server running on port ${port}`);
 });
