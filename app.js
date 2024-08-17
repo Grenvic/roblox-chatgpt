@@ -81,18 +81,6 @@ app.get('/roblox-messages', async (req, res) => {
   }
 });
 
-// Route for logs page
-app.get('/logs', async (req, res) => {
-  try {
-    // Fetch logs from Redis
-    const logs = await redisClient.lRange('logs', 0, -1);
-    res.render('logs', { logs });
-  } catch (error) {
-    console.error('Error fetching logs:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
 // Start server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
