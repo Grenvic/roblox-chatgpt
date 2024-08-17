@@ -1,88 +1,93 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const axios = require('axios');
-const cookieParser = require('cookie-parser');
-const Redis = require('redis');
 const { Pool } = require('pg');
-const path = require('path');
+const Redis = require('ioredis');
+const axios = require('axios');
+require('dotenv').config();
+
 const app = express();
+app.use(express.json());
 
-// Middleware
-app.use(bodyParser.json());
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from 'public'
-
-// Set view engine to EJS
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-
-// Redis client setup
-const redisClient = Redis.createClient({
-  url: process.env.REDIS_URL
-});
-redisClient.on('error', (err) => console.error('Redis Client Error', err));
-
-// PostgreSQL client setup
+// PostgreSQL connection
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
-// Route to handle messages from Roblox
-app.post('/roblox-message', async (req, res) => {
-  const { message, user } = req.body;
+// Redis connection
+const redis = new Redis(process.env.REDIS_URL);
 
-  if (!message || !user) {
-    return res.status(400).send('Invalid request. Message or user missing.');
-  }
+// ChatGPT API endpoint (replace with actual endpoint)
+const CHATGPT_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+app.post('/api/chat', async (req, res) => {
+  const { message, userId, position } = req.body;
 
   try {
-    // Store message in Redis
-    await redisClient.rPush('messages', JSON.stringify({ message, user }));
+    // Check if user is within 20 studs
+    if (position > 20) {
+      return res.status(400).json({ error: 'User is too far away' });
+    }
 
-    // Call ChatGPT API
-    const response = await axios.post('https://api.openai.com/v1/completions', {
-      model: 'gpt-4o-mini',
-      prompt: message,
-      max_tokens: 150
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    // Get conversation history from PostgreSQL
+    const history = await getConversationHistory(userId);
 
-    const reply = response.data.choices[0].text.trim();
+    // Send message to ChatGPT
+    const chatGPTResponse = await sendToChatGPT(message, history);
 
-    // Store reply in Redis
-    await redisClient.rPush('replies', JSON.stringify({ reply, user }));
+    // Save conversation to PostgreSQL
+    await saveConversation(userId, message, chatGPTResponse);
 
-    res.json({ reply });
+    // Cache frequently used data in Redis
+    await cacheUserData(userId, { lastMessage: message, lastResponse: chatGPTResponse });
+
+    res.json({ response: chatGPTResponse });
   } catch (error) {
-    console.error('Error communicating with ChatGPT:', error);
-    res.status(500).send('Internal Server Error');
+    console.error('Error processing chat:', error);
+    res.status(500).json({ error: 'An error occurred while processing the chat' });
   }
 });
 
-// Route for homepage
-app.get('/', (req, res) => {
-  res.render('index');
-});
-
-// Route for Roblox messages page
-app.get('/roblox-messages', async (req, res) => {
+async function getConversationHistory(userId) {
+  const client = await pool.connect();
   try {
-    // Fetch messages from Redis
-    const messages = await redisClient.lRange('messages', 0, -1);
-    const replies = await redisClient.lRange('replies', 0, -1);
-    res.render('roblox-messages', { messages: messages.map(msg => JSON.parse(msg)), replies: replies.map(rep => JSON.parse(rep)) });
-  } catch (error) {
-    console.error('Error fetching messages:', error);
-    res.status(500).send('Internal Server Error');
+    const result = await client.query('SELECT message, response FROM conversations WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 5', [userId]);
+    return result.rows;
+  } finally {
+    client.release();
   }
-});
+}
 
-// Start server
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+async function sendToChatGPT(message, history) {
+  const conversation = history.map(h => ({ role: 'user', content: h.message })).concat([{ role: 'user', content: message }]);
+  
+  const response = await axios.post(CHATGPT_API_URL, {
+    model: 'gpt-3.5-turbo',
+    messages: conversation
+  }, {
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  return response.data.choices[0].message.content;
+}
+
+async function saveConversation(userId, message, response) {
+  const client = await pool.connect();
+  try {
+    await client.query('INSERT INTO conversations (user_id, message, response) VALUES ($1, $2, $3)', [userId, message, response]);
+  } finally {
+    client.release();
+  }
+}
+
+async function cacheUserData(userId, data) {
+  await redis.hset(`user:${userId}`, data);
+  await redis.expire(`user:${userId}`, 3600); // Expire after 1 hour
+}
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
