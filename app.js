@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public'));
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -20,6 +21,42 @@ const redis = new Redis(process.env.REDIS_URL);
 
 // ChatGPT API endpoint (replace with actual endpoint)
 const CHATGPT_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+// Main page route
+app.get('/', (req, res) => {
+  res.send(`
+    <h1>Welcome to Roblox-ChatGPT Integration</h1>
+    <a href="/roblox-messages" style="position: absolute; top: 10px; right: 10px;">View Roblox Messages</a>
+  `);
+});
+
+// Roblox messages page route
+app.get('/roblox-messages', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT * FROM conversations ORDER BY timestamp DESC LIMIT 50');
+    const messages = result.rows;
+    client.release();
+
+    let messagesHtml = messages.map(msg => `
+      <div style="border: 1px solid #ccc; margin: 10px; padding: 10px;">
+        <p><strong>User ID:</strong> ${msg.user_id}</p>
+        <p><strong>Message:</strong> ${msg.message}</p>
+        <p><strong>Response:</strong> ${msg.response}</p>
+        <p><strong>Timestamp:</strong> ${msg.timestamp}</p>
+      </div>
+    `).join('');
+
+    res.send(`
+      <h1>Roblox Messages</h1>
+      <a href="/" style="position: absolute; top: 10px; right: 10px;">Back to Main Page</a>
+      ${messagesHtml}
+    `);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error retrieving messages");
+  }
+});
 
 app.post('/api/chat', async (req, res) => {
   const { message, userId, position } = req.body;
